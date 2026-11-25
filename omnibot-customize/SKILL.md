@@ -27,17 +27,18 @@ description: 维护用户的 OmniBot 安卓应用个人定制（paher1221/OmniBo
 
 - 设置项：设置 → 杂项 → "启动时" → "进入指定智能体"，选中后出现智能体下拉框。
 - 数据：`ChatStartupBehavior.specifiedAgent`（`ui/lib/models/chat_startup_behavior.dart`）+ `StorageService.kChatStartupAgentIdKey`。
-- 生效点有两处，**缺一不可**：
+- 生效点只有两处（2026-11-25 用户明确：**设置只管打开 App 时默认进哪个智能体，新建对话必须跟随左上角当前选中的智能体，不得读启动设置**）：
   1. `chat_page_lifecycle.dart` `_resolveConversationThreadTarget`：无传入目标时按设置开新对话。
-  2. `home_drawer_actions.dart` `_openNewConversation`：首页加号按钮原本写死 `xiaowan-acp`，需读取设置覆盖。
-- 左上角选择器默认值：`home_drawer.dart` `_homeFilter` 初始为 xiaowan；`home_drawer_home.dart` `_readHomeAgentCatalog` 首次加载目录时用 `_pendingHomeStartupAgentId` 应用指定智能体。注意 `_homeFilters` 会过滤掉未安装（installed != true 或 status == missing）的智能体，未安装的回落小万。
+  2. 左上角选择器默认值：`home_drawer.dart` `_homeFilter` 初始为 xiaowan；`home_drawer_home.dart` `_readHomeAgentCatalog` 首次加载目录时用 `_pendingHomeStartupAgentId` 应用指定智能体。注意 `_homeFilters` 会过滤掉未安装（installed != true 或 status == missing）的智能体，未安装的回落小万。
+- `home_drawer_actions.dart` `_openNewConversation` 保持原样（用 `_homeFilter.agentId`，即当前选中智能体）。曾按启动设置覆盖（17ccb1e02），用户反馈行为不对，已 revert（678675936）。
 
 ## 已完成的定制（提交记录）
 
 - `f359c9089`：退役 Claude Code / Kimi Code / Na 三个智能体；删除 Kimi Code Web 全套；终端环境页移除 claude_code、kimi 安装入口。
 - `c2b92a1a5`：删除设置页与"我的"页的"账号与 AI 服务"入口（保留登录页给首次引导）；新增启动默认智能体设置。
-- `17ccb1e02`：首页加号新建对话遵循启动智能体设置。
+- `17ccb1e02`：首页加号新建对话遵循启动智能体设置（后被 678675936 revert，见上）。
 - `0ce89a031`：打开 App 时左上角选择器默认落在指定智能体。
+- `678675936` + `4ca0611ee`：revert 17ccb1e02；revert 顺带删掉了 `home_drawer.dart` 的 `chat_startup_behavior.dart` import，但 0ce89a031 的选择器逻辑仍需要它，补回后构建通过。
 
 ## 构建与发版
 
@@ -59,4 +60,6 @@ description: 维护用户的 OmniBot 安卓应用个人定制（paher1221/OmniBo
 - 界面引用智能体 id 的地方多是条件判断（`== 'na-cloud'`），清单删掉后不触发，安全；但 `agent_brand_icon.dart`、`home_drawer_conversation_list.dart` 里的映射要保留（旧对话展示用）。
 - `model_vendor_catalog.dart` 里的 kimi/moonshot 是模型供应商（Moonshot API），与智能体无关，不要删。
 - 签名与官方版不同，装包前必须卸载原版。
+- **revert 提交后必须全量编译验证**：revert 可能删掉仍被其他提交使用的 import/引用（如上例），也可能遇到 Maven Central 429 限流导致构建在依赖解析阶段就挂（日志特征：`Received status code 429`，30 秒内失败），限流类失败直接重新触发即可。
+- 构建日志下载：`GET /actions/runs/<id>/logs` 需加 `-L` 跟随 302 跳转，否则拿到空文件。
 - APK 交付：artifact 下载的 zip 实为 APK 本体，改名 `.apk` 后再包一层 zip 交付（publish_file 不支持 APK）。
